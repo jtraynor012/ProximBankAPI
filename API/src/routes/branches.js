@@ -72,7 +72,7 @@ router.get('/accessibility/:branchId', async (req, res) => {
     }
 })
 
-
+/*
 // This gets each branch by the ID. Test using localhost/branches/1 (if 1 is the branchID.)
 router.get('/:branchId', async (req, res) => {
     //grab branchID from request header
@@ -93,6 +93,7 @@ router.get('/:branchId', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
 });
+*/
 
 // Creates a new bank Branch, POST endpoint.  Takes 3 inputs: branchId, name, phoneNumber.
 router.post('/', async (req, res) => {
@@ -129,6 +130,7 @@ router.delete('/:branchId', async (req, res) => {
     }
 });
 
+/*
 // PUT endpoint to UPDATE Branch details. Uses /branches/{branchID} to select the branch. New details in body.
 router.put('/:branchId', async (req, res) => {
     const branchId = req.params.branchId;
@@ -150,7 +152,7 @@ router.put('/:branchId', async (req, res) => {
         console.error("Error updating branch details: ", error);
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
-});
+    */
 
 //usage /branches/availability
 router.get('/availability', async (req, res) => {
@@ -191,7 +193,7 @@ router.get('/availability/:branchId', async (req, res) => {
 router.get('/location', async (req, res) => {
     try{
         //grab all location info about all branches from DB
-        query="SELECT * FROM BRANCH_LOCATION";
+        let query="SELECT * FROM BRANCH_LOCATION";
         const [rows] = await db.query(query);
         res.json(rows);
 
@@ -204,7 +206,7 @@ router.get('/location', async (req, res) => {
 router.get('/location-town/:town', async (req, res) => {
     const town = req.params.town;
     try{
-        query=`SELECT * FROM BRANCH_LOCATION WHERE Town = ${town}`;
+        let query=`SELECT * FROM BRANCH_LOCATION WHERE Town = ${town}`;
         const [rows] = await db.query(query);
         res.json(rows);
     }catch(error){
