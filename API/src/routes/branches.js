@@ -64,6 +64,19 @@ router.get('/availability', async (req, res) => {
 
 })
 
+router.get('/location', async (req, res) => {
+    try{
+        query="SELECT * FROM BRANCH_LOCATION";
+        const [rows, fields] = await db.query(query);
+        res.json(rows);
+
+    }catch(error){
+        console.error('Error fetching location data: ', error);
+        res.status(500).json({error: 'Internal Server Error'});
+    }
+
+})
+
 
 //boiler plate code to preview querying and connection
 async function getAllBankBranches() {
