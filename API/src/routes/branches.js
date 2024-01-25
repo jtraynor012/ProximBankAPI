@@ -37,7 +37,6 @@ router.get('/accessibility/:branchId', async (req, res) => {
     }
 })
 
-
 //Using /accessibility
 //branches/accessibility?options=x1, x2, x3
 //example => branches/accessibility?options=InternalRamp,AutomaticDoors
@@ -48,7 +47,7 @@ router.get('/accessibility', async (req, res) => {
 
         //if no filter options, throw error with info on how to ammend
         if(!accessibilityOptions){
-            return res.status(404).json({error: 'Missing options parameter - use ?options=option1,option2,... after accessibility to specifiy accessibility filter(s)'});
+            return res.status(400).json({error: 'Missing options parameter - use ?options=option1,option2,... after accessibility to specifiy accessibility filter(s)'});
         }
 
         //base query
@@ -64,16 +63,35 @@ router.get('/accessibility', async (req, res) => {
         }
 
         //run query and return results to user
-        const [rows] = await db.query(query);
+        const [rows, fields] = await db.query(query);
         res.json(rows);
 
     } catch(error){
         console.error('Error fetching branches accessibility: ', error);
-        res.status(500).json({error: 'Internal Server Error', details: error.message});
+        res.status(500).json({error: 'Internal Server Error'});
     }
 });
 
+// This gets each branch by the ID. Test using localhost/branches/1 (if 1 is the branchID.)
+router.get('/:branchId', async (req, res) => {
+    //grab branchID from request header
+    const branchId = req.params.branchId;
 
+    try {
+        //get branch details from DB
+        const branchDetails = await getBankBranchById(branchId);
+
+        //if branch not found, throw error
+        if (!branchDetails) {
+            return res.status(404).json({ error: 'Branch not found' });
+        }
+
+        res.json(branchDetails);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
 // Creates a new bank Branch, POST endpoint.  Takes 3 inputs: branchId, name, phoneNumber.
 router.post('/', async (req, res) => {
@@ -86,8 +104,8 @@ router.post('/', async (req, res) => {
         // Return the ID of the newly inserted branch
         res.status(201).json({ branchId });
     } catch (error) {
-        console.error("Error creating new branch: ", error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
@@ -105,26 +123,33 @@ router.delete('/:branchId', async (req, res) => {
 
         res.json({ message: 'Branch deleted successfully' });
     } catch (error) {
-        console.error("Error deleting branch: ", error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message});
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
+// PUT endpoint to UPDATE Branch details. Uses /branches/[branchID] to select the branch. New details in body.
+router.put('/:branchId', async (req, res) => {
+    const branchId = req.params.branchId;
+    const { name, phoneNumber } = req.body;
 
-//usage /branches/availability
-router.get('/availability', async (req, res) => {
-    try{
-        //grab all availability info about all branches from DB
-        let query = 'SELECT * FROM BRANCH_AVAILABILITY';
-        const [rows] = await db.query(query);
-        res.json(rows);
+    try {
+        // Check if the branch with the specified ID exists
+        const existingBranch = await getBankBranchById(branchId);
+        if (!existingBranch) {
+            return res.status(404).json({ error: 'Branch not found' });
+        }
 
-        //if error during query or connection, throw error
-    }catch(error){
-        console.error('Error fetching branch avilability: ', error);
-        res.status(500).json({error: 'Internal Server Error', details: error.message });
+        // Perform database update
+        await db.query('UPDATE BRANCH SET Name = ?, PhoneNumber = ? WHERE Branch_ID = ?', [name, phoneNumber, branchId]);
+
+        // Return a success message or updated details
+        res.json({ message: 'Branch details updated successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
-})
+});
 
 //usage /branches/availabilit/{BranchID}
 router.get('/availability/:branchId', async (req, res) => {
@@ -146,76 +171,67 @@ router.get('/availability/:branchId', async (req, res) => {
     }
 })
 
-//usage /branches/location
+
+
+router.get('/availability', async (req, res) => {
+    try{
+        //grab all availability info about all branches from DB
+        let query = 'SELECT * FROM BRANCH_AVAILABILITY';
+        const [rows, fields] = await db.query(query);
+        res.json(rows);
+
+        //if error during query or connection, throw error
+    }catch(error){
+        console.error('Error fetching branch avilability: ', error);
+        res.status(500).json({error: 'Internal Server Error'});
+    }
+})
+
+/*
+    latitude, longitude are either the users location/chosen location
+    search radius is the distance they want to see from them (IN KM!)
+*/
+router.get('/location/:latitude/:longitude/:searchRadius', async (req,res) => {
+    function toRadians(degrees){
+        return degrees * Math.PI / 180;
+    }
+    try{
+        let latitude = toRadians(parseFloat(req.params.latitude));
+        let longitude = toRadians(parseFloat(req.params.longitude));
+        let searchRadius = parseFloat(req.params.searchRadius);
+        let validBranches = [];
+        query="SELECT * FROM BRANCH_LOCATION";
+        const[rows,fields] = await db.query(query);
+        for(let i=0; i<rows.length; i++){
+            let lat2 = toRadians(parseFloat(rows[i]['Latitude']));
+            let long2 = toRadians(parseFloat(rows[i]['Longitude']));
+            /* 
+            https://community.fabric.microsoft.com/t5/Desktop/How-to-calculate-lat-long-distance/td-p/1488227#:~:text=You%20need%20Latitude%20and%20Longitude,is%20Earth%20radius%20in%20km.)
+            uses the harvesine formula to get the distance between the query coords and the branch coords
+            distance is in KM... 
+            */
+            let distance = Math.acos((Math.sin(latitude) * Math.sin(lat2)) + (Math.cos(latitude)*Math.cos(lat2)) * (Math.cos(long2 - longitude))) * 6371
+            if(distance<searchRadius){
+                validBranches.push(rows[i]);
+            }
+        }
+        res.json(validBranches);
+    }catch(error){
+        console.error('Error fetching locations: ', error);
+        res.status(500).json({error: 'Internal Server Error'});
+    }
+})
+
 router.get('/location', async (req, res) => {
     try{
         //grab all location info about all branches from DB
-        let query="SELECT * FROM BRANCH_LOCATION";
-        const [rows] = await db.query(query);
+        query="SELECT * FROM BRANCH_LOCATION";
+        const [rows, fields] = await db.query(query);
         res.json(rows);
 
     }catch(error){
         console.error('Error fetching location data: ', error);
-        res.status(500).json({error: 'Internal Server Error', details: error.message });
-    }
-})
-
-router.get('/location-town/:town', async (req, res) => {
-    const town = req.params.town;
-    try{
-        let query=`SELECT * FROM BRANCH_LOCATION WHERE Town = ${town}`;
-        const [rows] = await db.query(query);
-        res.json(rows);
-    }catch(error){
-        console.error("Error fetching branch for this town", error);
-        res.status(500).json({error: 'Internal Server Error', details: error.message });
-    };
-})
-
-// This gets each branch by the ID. Test using localhost/branches/1 (if 1 is the branchID.)
-router.get('/:branchId', async (req, res) => {
-    //grab branchID from request header
-    const branchId = req.params.branchId;
-
-    try {
-        let query = `SELECT * FROM BRANCH WHERE Branch_ID = ${branchId}`;
-
-        //get branch details from DB
-        const [branchDetails] = await db.query(query);
-
-        //if branch not found, throw error
-        if (!branchDetails) {
-            return res.status(404).json({ error: 'Branch not found' });
-        }
-
-        res.json(branchDetails);
-    } catch (error) {
-        console.error("Error fetching branch: ", error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
-    }
-});
-
-// PUT endpoint to UPDATE Branch details. Uses /branches/{branchID} to select the branch. New details in body.
-router.put('/:branchId', async (req, res) => {
-    const branchId = req.params.branchId;
-    const { name, phoneNumber } = req.body;
-
-    try {
-        // Check if the branch with the specified ID exists
-        let query = `SELECT * FROM BRANCH WHERE Branch_ID = ${branchId}`;
-        const [existingBranch] = await db.query(query);
-        if (!existingBranch) {
-            return res.status(404).json({ error: 'Branch not found' });
-        }
-
-        // Perform database update
-        await db.query('UPDATE BRANCH SET Name = ?, PhoneNumber = ? WHERE Branch_ID = ?', [name, phoneNumber, branchId]);
-
-        // Return a success message or updated details
-        res.json({ message: 'Branch details updated successfully' });
-    } catch (error) {
-        console.error("Error updating branch details: ", error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(500).json({error: 'Internal Server Error'});
     }
 })
 
