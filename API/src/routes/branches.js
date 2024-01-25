@@ -15,6 +15,29 @@ router.get('/', async (req, res) => {
     }
 });
 
+//usage /branch/accessibility/{branch_ID}
+router.get('/accessibility/:branchId', async (req, res) => {
+    //grab branch ID from request header
+    const branchID = req.params.branchId;
+    try{
+        //get all accessibility info from BRANCH_ACCESSIBILITY for Branch_ID
+        let query = `SELECT * FROM BRANCH_ACCESSIBILITY WHERE Branch_ID = ${branchID}`;
+        const [rows] = await db.query(query);
+
+        //If result is empty, throw branch not found error
+        if(rows.affectedRows === 0){
+            console.error("Branch not found");
+            res.status(404).json({error: "Branch not found"});
+        }
+        //return accessibility info to user
+        res.json(rows);
+    } catch(error){
+        console.log("Error fetching accessibility for branch", error);
+        res.status(500).json({error: 'Internal Server Error', details: error.message });
+    }
+})
+
+
 //Using /accessibility
 //branches/accessibility?options=x1, x2, x3
 //example => branches/accessibility?options=InternalRamp,AutomaticDoors
@@ -50,50 +73,7 @@ router.get('/accessibility', async (req, res) => {
     }
 });
 
-//usage /branch/accessibility/{branch_ID}
-router.get('/accessibility/:branchId', async (req, res) => {
-    //grab branch ID from request header
-    const branchID = req.params.branchId;
-    try{
-        //get all accessibility info from BRANCH_ACCESSIBILITY for Branch_ID
-        let query = `SELECT * FROM BRANCH_ACCESSIBILITY WHERE Branch_ID = ${branchID}`;
-        const [rows] = await db.query(query);
 
-        //If result is empty, throw branch not found error
-        if(rows.affectedRows === 0){
-            console.error("Branch not found");
-            res.status(404).json({error: "Branch not found"});
-        }
-        //return accessibility info to user
-        res.json(rows);
-    } catch(error){
-        console.log("Error fetching accessibility for branch", error);
-        res.status(500).json({error: 'Internal Server Error', details: error.message });
-    }
-})
-
-/*
-// This gets each branch by the ID. Test using localhost/branches/1 (if 1 is the branchID.)
-router.get('/:branchId', async (req, res) => {
-    //grab branchID from request header
-    const branchId = req.params.branchId;
-
-    try {
-        //get branch details from DB
-        const branchDetails = await getBankBranchById(branchId);
-
-        //if branch not found, throw error
-        if (!branchDetails) {
-            return res.status(404).json({ error: 'Branch not found' });
-        }
-
-        res.json(branchDetails);
-    } catch (error) {
-        console.error("Error fetching branch: ", error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
-    }
-});
-*/
 
 // Creates a new bank Branch, POST endpoint.  Takes 3 inputs: branchId, name, phoneNumber.
 router.post('/', async (req, res) => {
@@ -130,29 +110,6 @@ router.delete('/:branchId', async (req, res) => {
     }
 });
 
-/*
-// PUT endpoint to UPDATE Branch details. Uses /branches/{branchID} to select the branch. New details in body.
-router.put('/:branchId', async (req, res) => {
-    const branchId = req.params.branchId;
-    const { name, phoneNumber } = req.body;
-
-    try {
-        // Check if the branch with the specified ID exists
-        const existingBranch = await getBankBranchById(branchId);
-        if (!existingBranch) {
-            return res.status(404).json({ error: 'Branch not found' });
-        }
-
-        // Perform database update
-        await db.query('UPDATE BRANCH SET Name = ?, PhoneNumber = ? WHERE Branch_ID = ?', [name, phoneNumber, branchId]);
-
-        // Return a success message or updated details
-        res.json({ message: 'Branch details updated successfully' });
-    } catch (error) {
-        console.error("Error updating branch details: ", error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
-    }
-    */
 
 //usage /branches/availability
 router.get('/availability', async (req, res) => {
@@ -213,6 +170,53 @@ router.get('/location-town/:town', async (req, res) => {
         console.error("Error fetching branch for this town", error);
         res.status(500).json({error: 'Internal Server Error', details: error.message });
     };
+})
+
+// This gets each branch by the ID. Test using localhost/branches/1 (if 1 is the branchID.)
+router.get('/:branchId', async (req, res) => {
+    //grab branchID from request header
+    const branchId = req.params.branchId;
+
+    try {
+        let query = `SELECT * FROM BRANCH WHERE Branch_ID = ${branchId}`;
+
+        //get branch details from DB
+        const [branchDetails] = await db.query(query);
+
+        //if branch not found, throw error
+        if (!branchDetails) {
+            return res.status(404).json({ error: 'Branch not found' });
+        }
+
+        res.json(branchDetails);
+    } catch (error) {
+        console.error("Error fetching branch: ", error);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+// PUT endpoint to UPDATE Branch details. Uses /branches/{branchID} to select the branch. New details in body.
+router.put('/:branchId', async (req, res) => {
+    const branchId = req.params.branchId;
+    const { name, phoneNumber } = req.body;
+
+    try {
+        // Check if the branch with the specified ID exists
+        let query = `SELECT * FROM BRANCH WHERE Branch_ID = ${branchId}`;
+        const [existingBranch] = await db.query(query);
+        if (!existingBranch) {
+            return res.status(404).json({ error: 'Branch not found' });
+        }
+
+        // Perform database update
+        await db.query('UPDATE BRANCH SET Name = ?, PhoneNumber = ? WHERE Branch_ID = ?', [name, phoneNumber, branchId]);
+
+        // Return a success message or updated details
+        res.json({ message: 'Branch details updated successfully' });
+    } catch (error) {
+        console.error("Error updating branch details: ", error);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
 })
 
 
