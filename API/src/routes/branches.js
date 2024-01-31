@@ -1,5 +1,4 @@
-const express = require('express');
-const router = express.Router();
+const express = require('express'); const router = express.Router();
 const db = require('../database/db.js');
 const { parseISO } = require('date-fns');
 
@@ -75,9 +74,7 @@ router.get('/accessibility/:branchId', async (req, res) => {
     }
 })
 
-
 // LOCATION
-
 router.get('/location', async (req, res) => {
     try{
         //grab all location info about all branches from DB
@@ -90,6 +87,58 @@ router.get('/location', async (req, res) => {
         res.status(500).json({error: 'Internal Server Error'});
     }
 })
+
+router.get('/location-town/:town', async (req, res) => {
+    const town = req.params.town;
+    try{
+        let query=`SELECT * FROM BRANCH_LOCATION WHERE Town = ${town}`;
+        const [rows] = await db.query(query);
+        res.json(rows);
+    }catch(error){
+        console.error("Error fetching branch for this town", error);
+        res.status(500).json({error: 'Internal Server Error', details: error.message });
+    };
+})
+
+// Return 5 nearest branches to specified location
+// Usage - /branches/location/nearestme/{latitude}/{longitude}
+router.get('/location/nearestme/:latitude/:longitude', async (req, res) => {
+    function toRadians(degrees){
+        return degrees * Math.PI / 180;
+    }
+    try{
+        let latitude = toRadians(parseFloat(req.params.latitude));
+        let longitude = toRadians(parseFloat(req.params.longitude));
+        let searchRadius = 5.0; //5km search radius
+        let validBranches = [];
+        query="SELECT * FROM BRANCH_LOCATION";
+        const[rows,fields] = await db.query(query);
+
+        //only return closest 5 branches
+        for(let i=0; i<rows.length; i++){
+            let lat2 = toRadians(parseFloat(rows[i]['Latitude']));
+            let long2 = toRadians(parseFloat(rows[i]['Longitude']));
+            /* 
+            https://community.fabric.microsoft.com/t5/Desktop/How-to-calculate-lat-long-distance/td-p/1488227#:~:text=You%20need%20Latitude%20and%20Longitude,is%20Earth%20radius%20in%20km.)
+            uses the harvesine formula to get the distance between the query coords and the branch coords
+            distance is in KM... 
+            */
+            let distance = Math.acos((Math.sin(latitude) * Math.sin(lat2)) + (Math.cos(latitude)*Math.cos(lat2)) * (Math.cos(long2 - longitude))) * 6371
+            if(distance<searchRadius && distance != 0){
+                var branchObj = {branch: rows[i], dist: distance};
+                validBranches.push(branchObj);
+                console.log(validBranches[validBranches.length - 1]);
+            }
+        }
+        validBranches.sort((a,b) => a.dist - b.dist);
+        res.json(validBranches.slice(0, 5));
+    }catch(error){
+        console.error('Error fetching locations: ', error);
+        res.status(500).json({error: 'Internal Server Error'});
+    }
+
+})
+
 
 /*
     latitude, longitude are either the users location/chosen location
@@ -131,7 +180,7 @@ router.get('/location/:latitude/:longitude/:searchRadius', async (req,res) => {
 
 router.get('/availability', async (req, res) => {
     try{
-        //grab all availability info about all branches from DB
+        //grab all availability info about all branches from DB\
         let query = 'SELECT * FROM BRANCH_AVAILABILITY';
         const [rows, fields] = await db.query(query);
         res.json(rows);
@@ -289,101 +338,6 @@ router.put('/:branchId', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
-
-//usage /branches/availabilit/{BranchID}
-router.get('/availability/:branchId', async (req, res) => {
-    const branchID = req.params.branchId;
-
-    try{
-        let query = `SELECT * FROM BRANCH_AVAILABILITY WHERE Branch_ID = ${branchID}`;
-        const [rows] = await db.query(query);
-
-        if(rows.affectedRows === 0){
-            console.error("Branch does not exist");
-            res.status(404).json({error: 'Branch does not exist'});
-        }
-
-        res.json(rows);
-    } catch(error){
-        console.log('Error fetching availability for branch: ', error);
-        res.status(500).json({error: 'Internal Server Error', details: error.message });
-    }
-})
-
-
-
-router.get('/availability', async (req, res) => {
-    try{
-        //grab all availability info about all branches from DB
-        let query = 'SELECT * FROM BRANCH_AVAILABILITY';
-        const [rows, fields] = await db.query(query);
-        res.json(rows);
-
-        //if error during query or connection, throw error
-    }catch(error){
-        console.error('Error fetching branch avilability: ', error);
-        res.status(500).json({error: 'Internal Server Error'});
-    }
-})
-
-/*
-    latitude, longitude are either the users location/chosen location
-    search radius is the distance they want to see from them (IN KM!)
-*/
-router.get('/location/:latitude/:longitude/:searchRadius', async (req,res) => {
-    function toRadians(degrees){
-        return degrees * Math.PI / 180;
-    }
-    try{
-        let latitude = toRadians(parseFloat(req.params.latitude));
-        let longitude = toRadians(parseFloat(req.params.longitude));
-        let searchRadius = parseFloat(req.params.searchRadius);
-        let validBranches = [];
-        query="SELECT * FROM BRANCH_LOCATION";
-        const[rows,fields] = await db.query(query);
-        for(let i=0; i<rows.length; i++){
-            let lat2 = toRadians(parseFloat(rows[i]['Latitude']));
-            let long2 = toRadians(parseFloat(rows[i]['Longitude']));
-            /* 
-            https://community.fabric.microsoft.com/t5/Desktop/How-to-calculate-lat-long-distance/td-p/1488227#:~:text=You%20need%20Latitude%20and%20Longitude,is%20Earth%20radius%20in%20km.)
-            uses the harvesine formula to get the distance between the query coords and the branch coords
-            distance is in KM... 
-            */
-            let distance = Math.acos((Math.sin(latitude) * Math.sin(lat2)) + (Math.cos(latitude)*Math.cos(lat2)) * (Math.cos(long2 - longitude))) * 6371
-            if(distance<searchRadius){
-                validBranches.push(rows[i]);
-            }
-        }
-        res.json(validBranches);
-    }catch(error){
-        console.error('Error fetching locations: ', error);
-        res.status(500).json({error: 'Internal Server Error'});
-    }
-})
-
-router.get('/location', async (req, res) => {
-    try{
-        //grab all location info about all branches from DB
-        query="SELECT * FROM BRANCH_LOCATION";
-        const [rows, fields] = await db.query(query);
-        res.json(rows);
-
-    }catch(error){
-        console.error('Error fetching location data: ', error);
-        res.status(500).json({error: 'Internal Server Error'});
-    }
-})
-
-// Gets the bank branch, specified by the ID.
-async function getBankBranchById(branchId) {
-    const [rows] = await db.query('SELECT * FROM BRANCH WHERE Branch_ID = ?', [branchId]);
-
-    if (rows.length === 0) {
-        return null; // No branch
-    }
-
-    return rows[0]; // Returns the first result.
-}
 
 
 

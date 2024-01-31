@@ -16,7 +16,7 @@ const PORT = process.env.port || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 app.use('/branches', branchesRouter);
-app.use('/atm', atmRouter);
+app.use('/atms', atmRouter);
 
 
 app.listen(PORT, () => {
