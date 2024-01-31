@@ -4,13 +4,21 @@
 //express and body-parser imports
 const express = require('express');
 const bodyParser = require('body-parser');
+const path = require('path');
 const cors = require('cors');
 
 //example router for testing purposes
 const branchesRouter = require('./routes/branches');
 const atmRouter = require('./routes/atms');
 
+
+
 const app = express ();
+app.get('/api-docs', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ProximDocumentation.html'));
+})
+
+
 const PORT = process.env.port || 3000;
 
 app.use(cors());
